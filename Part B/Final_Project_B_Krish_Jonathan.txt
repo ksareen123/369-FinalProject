@@ -1,0 +1,211 @@
+#include <msp430.h>
+#include <TP_sim.h>
+#include <stdio.h>
+
+extern unsigned char V_LCD_data[34];  // Virtual LCD
+extern unsigned char V_ACC[3];  // Acc. sensor
+extern unsigned char V_PT;  // Virtual Port
+extern unsigned char V_NT;  // Virtual Notes
+extern unsigned char V_sensor; // Virtual sensor
+unsigned int s;
+int x;
+int y;
+int z;
+
+float x1;
+float y1;
+float z1;
+
+int main(void) {
+    WDTCTL = WDTPW | WDTHOLD;   // hold the watchdog timer
+    P5DIR &= ~0x60;
+    P5REN |= 0x60;
+    P5OUT |= 0x60;  // Launchpad button config.
+    BH_EDU_SIM_init(); //  BH EDU sim init, Used: P1.2 & P1.3 (UART), P5.5 (Input), GINT enabled
+
+
+    //Switch 1 (P5.6) / 2 (P5.7)
+    P5DIR &= ~0xFF;  // configure as input
+    P5REN |= 0xFF;   // pull up resistors
+    P5OUT |= 0xFF;   // active low
+    V_PT = BIT0;     //
+
+    //LED initialization
+    P1DIR |= 0x02; // output direction, P1.1
+    P1DIR |= 0x01; // output direction, P1.0
+
+    //ADC initialization
+    ADC12CTL0 = ADC12SHT0_6 | ADC12MSC | ADC12ON; // ADC CTL0 set up
+    ADC12CTL1 = ADC12SHP | ADC12CONSEQ_1; // ADC CTL1 set up
+    ADC12CTL2 |= ADC12RES_2; // 12-bit conversion
+    // multiple sample conversion, sequence of channel mode
+    ADC12MCTL0 = ADC12INCH_9;
+    ADC12MCTL1 = ADC12INCH_10;
+    ADC12MCTL2 = ADC12INCH_11 | ADC12EOS; // end of sequence
+    //Pin 4.1-4.3 init
+    P4SEL1 |= 0x0E; // alternative function, (A9, A10, A11
+    P4SEL0 |= 0x0E; // alternative function, (A9, A10, A11)
+
+    unsigned int t_offset = 100;
+
+    while(1){ // main loop
+
+        if(P5IN == 0xBF) { // 10111111
+            P1OUT |= 0x01; // 00000001
+            V_PT &= ~BIT0; //resets bit 0
+            }
+        else {
+            P1OUT &= ~0x01; // LED off
+            V_PT |= 0x01; //sets bit 1
+            }
+        __delay_cycles(500);
+
+        // 101 / 100 bit 2
+        if(V_PT == 0x4 || V_PT == 0x5) {
+            P1OUT |= 0x02;
+        }
+        else {
+            P1OUT &= ~0x02;
+        }
+
+        V_LCD_data[0]='K';
+        V_LCD_data[1]='r';
+        V_LCD_data[2]='i';
+        V_LCD_data[3]='s';
+        V_LCD_data[4]='h';
+        V_LCD_data[5]=' ';
+        V_LCD_data[6]='&';
+        V_LCD_data[7]=' ';
+        V_LCD_data[8]='J';
+        V_LCD_data[9]='o';
+        V_LCD_data[10]='n';
+        V_LCD_data[11]='a';
+        V_LCD_data[12]='t';
+        V_LCD_data[13]='h';
+        V_LCD_data[14]='a';
+        V_LCD_data[15]='n';
+        s = (int)V_sensor; //display V sensor data (changed by slider)
+        V_LCD_data[16]=((s/100)%10)+'0';
+        V_LCD_data[17]=((s/10)%10)+'0';
+        V_LCD_data[18]=((s)%10)+'0';
+
+        //accelerometer data
+        ADC12CTL0 |= ADC12ENC | ADC12SC; // ADC, Start conversion
+        while ((ADC12IFGR0 & BIT2)==0); // lag check
+        //calculations
+        x = ADC12MEM0;
+        y = ADC12MEM1;
+        z = ADC12MEM2;
+
+        if (z>(2090-t_offset)){
+            if (x > (2510-t_offset)) // E x axis
+            {V_NT = 'G';}
+            else if(x > (2390-t_offset)) // NE x axis
+            {V_NT = 'F';}
+            else if(x > (2070-t_offset)) // N x axis
+            {V_NT = 'E';}
+            else if(x > (1800-t_offset)) // NW x axis
+            {V_NT = 'D';}
+            else if(x > (1630-t_offset)) // W x axis
+            {V_NT = 'C';}
+        }
+        else {
+            if (x>(2000+t_offset)) // SE x axis
+            {V_NT = 'A';}
+            else if (x > (1780+t_offset)) // S x axis
+            {V_NT = 'B';}
+            else if (x > (1630+t_offset)) // SW x axis
+            {V_NT = 'K';}
+        }
+
+        if(y<(1700+t_offset)){ // fwd y axis
+            V_NT='H'; //Mario
+        }
+        if(y>(2400-t_offset)){ // rev y axis
+            V_NT='L'; //Vader
+        }
+
+        //adc conversion for acc window
+
+        x1 = (x/4095.0)*100.0;
+        y1 = (y/4095.0)*100.0;
+        z1 = (z/4095.0)*100.0;
+
+        V_ACC[0]= x1;
+        V_ACC[1]= y1;
+        V_ACC[2]= z1;
+
+        BH_EDU_SIM_task();  // BH EDU sim task
+        __delay_cycles(2000); // keep this line for the minimum delay
+    }
+
+    return 0;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/*
+ * #include <msp430.h>
+#include <TP_sim.h>
+
+extern unsigned char V_LCD_data[34];  // Virtual LCD
+extern unsigned char V_ACC[3];  // Acc. sensor
+extern unsigned char V_PT;  // Virtual Port
+extern unsigned char V_NT;  // Virtual Notes
+extern unsigned char V_sensor; // Virtual sensor
+
+int main(void) {
+    WDTCTL = WDTPW | WDTHOLD;   // hold the watchdog timer
+    P5DIR &= ~0x60;  P5REN |= 0x60;  P5OUT |= 0x60;  // Launchpad button config.
+    BH_EDU_SIM_init(); //  BH EDU sim init, Used: P1.2 & P1.3 (UART), P5.5 (Input), GINT enabled
+
+
+    while(1){
+
+
+        // Virtual LCD
+        V_LCD_data[0]='t';
+        V_LCD_data[1]='e';
+        V_LCD_data[2]='s';
+        V_LCD_data[3]='t';
+
+
+        BH_EDU_SIM_task();  // BH EDU sim task
+        __delay_cycles(2000); // keep this line for the minimum delay
+    }
+
+    return 0;
+}
+
+*/
